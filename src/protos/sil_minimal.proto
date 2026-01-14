@@ -1,0 +1,61 @@
+syntax = "proto3";
+
+package sil;
+
+// Ego vehicle state
+message EgoState {
+  float pos_x = 1;     // Position X [m]
+  float pos_y = 2;     // Position Y [m]
+  float velocity = 3;  // Velocity [m/s]
+  float heading = 4;   // Heading angle [rad]
+  float yaw_rate = 5;  // Yaw rate [rad/s]
+}
+
+// Control commands from virtual driver
+message ControlCommand {
+  float accel_cmd = 1;  // Acceleration command [m/s²]
+  float curv_cmd = 2;   // Curvature command [1/m] (steering)
+}
+
+// Status messages
+message Status {
+  bool success = 1;
+  string error_message = 2;
+}
+
+// Initialization request
+message InitRequest {
+  uint64 ego_id = 1;
+  EgoState initial_state = 2;
+}
+
+// Initialization reply
+message InitReply { Status status = 1; }
+
+// Tick request (sent every cycle)
+message TickRequest {
+  uint64 timestamp_us = 1;  // Timestamp in microseconds
+  EgoState ego_state = 2;
+}
+
+// Tick reply (control commands)
+message TickReply {
+  Status status = 1;
+  ControlCommand control = 2;
+}
+
+// Shutdown request
+message ShutdownRequest {
+  enum Reason { FINISHED = 0; ABORTED = 1; ERROR = 2; }
+  Reason reason = 1;
+}
+
+// Shutdown reply
+message ShutdownReply { Status status = 1; }
+
+// Service definition
+service VirtualDriverService {
+  rpc init(InitRequest) returns(InitReply);
+  rpc tick(TickRequest) returns(TickReply);
+  rpc shutdown(ShutdownRequest) returns(ShutdownReply);
+}
