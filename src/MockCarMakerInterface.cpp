@@ -13,7 +13,8 @@ void updateMockVehicle(double dt) {
   v += g_controlInputs.accel_cmd * dt;
   if (v < 0.0) v = 0.0;
 
-  double wheelbase = 2.5;
+  // TODO Unused variable
+  // double wheelbase = 2.5;
   g_vehicleState.yaw_rate = v * g_controlInputs.curv_cmd;
   g_vehicleState.heading += g_vehicleState.yaw_rate * dt;
 
