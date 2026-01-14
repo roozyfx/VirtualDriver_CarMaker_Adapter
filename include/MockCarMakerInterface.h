@@ -1,6 +1,5 @@
 // MockCarMakerInterface.h
-#ifndef MOCK_CARMAKER_INTERFACE_H
-#define MOCK_CARMAKER_INTERFACE_H
+#pragma once
 
 #include <cstdint>
 
@@ -29,7 +28,7 @@ struct MockControlInputs {
   double curv_cmd = 0.0;
 };
 
+void updateMockVehicle(double dt);
+
 extern MockVehicleState g_vehicleState;
 extern MockControlInputs g_controlInputs;
-
-#endif  // MOCK_CARMAKER_INTERFACE_H

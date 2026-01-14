@@ -4,13 +4,11 @@
 #include <thread>
 
 #include "MockCarMakerInterface.h"
-// TODO
 #include "SilCarMakerAdapter.h"
 
 int main() {
-  // Create your adapter instance
-  // TODO
-  SilCarMakerAdapter adapter("localhost:50051");  // Adjust as needed
+  // Create the adapter instance
+  SilCarMakerAdapter adapter("localhost:50051", 1);
 
   // Initialize
   if (adapter.init() != 0) {
@@ -31,8 +29,7 @@ int main() {
 
   for (int i = 0; i < 1000; ++i) {  // Run for 10 seconds
     // Update vehicle state based on previous control commands
-    // TODO
-    // updateMockVehicle(dt);
+    updateMockVehicle(dt);
 
     // Adapter reads inputs (applies control commands)
     adapter.readInputs(cycleNo);
