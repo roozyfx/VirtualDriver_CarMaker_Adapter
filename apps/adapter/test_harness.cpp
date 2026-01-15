@@ -28,14 +28,14 @@ int main() {
   uint32_t cycleNo = 0;
 
   for (int i = 0; i < 1000; ++i) {  // Run for 10 seconds
-    // Update vehicle state based on previous control commands
-    updateMockVehicle(dt);
+    // Adapter writes outputs (sends ego state)
+    adapter.writeOutputs(cycleNo);
 
     // Adapter reads inputs (applies control commands)
     adapter.readInputs(cycleNo);
 
-    // Adapter writes outputs (sends ego state)
-    adapter.writeOutputs(cycleNo);
+    // Update vehicle state based on previous control commands
+    updateMockVehicle(dt);
 
     // Adapter calculation step
     adapter.calc(dt, simTime);

@@ -13,7 +13,7 @@ SilCarMakerAdapter::SilCarMakerAdapter(const std::string& address,
                                        const uint64_t egoId)
     : mutex_{}, server_address_{address}, egoId_{egoId} {}
 
-// Initialize the gRPC client and prepare for communication
+// Initialize the gRPC client and establish connection
 int SilCarMakerAdapter::init() {
   std::lock_guard l(mutex_);
   channel_ =
@@ -31,7 +31,7 @@ int SilCarMakerAdapter::init() {
   }
 
   const auto timeout{std::chrono::system_clock::now() +
-                     std::chrono::seconds(2)};
+                     std::chrono::seconds(3)};
   if (!channel_->WaitForConnected(timeout)) {
     std::cerr << "Failed to connect to gRPC server at " << server_address_
               << std::endl;
@@ -40,7 +40,7 @@ int SilCarMakerAdapter::init() {
   return 0;
 }
 
-// Connect to gRPC server and prepare for communication
+// Prepare for communication and send initial state
 int SilCarMakerAdapter::testRunStart() {
   if (!stub_) return -1;
 
@@ -55,14 +55,14 @@ int SilCarMakerAdapter::testRunStart() {
   initialState->set_heading(0.0);
   initialState->set_yaw_rate(0.0);
 
-  sil::InitReply response;
-  auto status{stub_->init(&context, request, &response)};
+  sil::InitReply initReply;
+  auto status{stub_->init(&context, request, &initReply)};
 
   if (handleStatus(status) != 0) {
     return -1;
   }
-  if (!response.status().success()) {
-    std::cerr << "Initialization failed: " << response.status().error_message()
+  if (!initReply.status().success()) {
+    std::cerr << "Initialization failed: " << initReply.status().error_message()
               << std::endl;
     return -1;
   }
@@ -70,56 +70,73 @@ int SilCarMakerAdapter::testRunStart() {
   return 0;
 }
 
-int SilCarMakerAdapter::calc(double /*dt*/, double /*simTime*/) {
-  // TODO calculation updates
-  return 0;
+int SilCarMakerAdapter::calc([[maybe_unused]] double dt,
+                             [[maybe_unused]] double simTime) {
+  // Nothing to do here; work is done in readInputs and writeOutputs
+  return initialized_ ? 0 : -1;
 }
 
 void SilCarMakerAdapter::readInputs(uint32_t /*cycleNo*/) {
-  if (!stub_) return;
+  std::lock_guard l(mutex_);
+  if (!initialized_ || !stub_) return;
 
-  grpc::ClientContext context;
-  sil::TickRequest request;
-  sil::TickReply response;
-
-  stub_->tick(&context, request, &response);
-
-  if (!response.status().success()) {
-    std::cerr << "Reading ControlCommand, Tick Reply not successful: "
-              << response.status().error_message() << std::endl;
+  if (!havePendingTickReply_) {
+    // TODO Think of a better way to handle this situation.
+    // Nothing to do, so return
     return;
   }
-  const auto accelerationCmd{response.control().accel_cmd()};
-  const auto curvatureCmd{response.control().curv_cmd()};
-  g_controlInputs.accel_cmd = accelerationCmd;
-  g_controlInputs.curv_cmd = curvatureCmd;
+  havePendingTickReply_ = false;
+
+  if (!lastTickReply_.status().success()) {
+    std::cerr << "Tick reply not successful: "
+              << lastTickReply_.status().error_message() << std::endl;
+  }
+
+  // Apply control command from the stored reply
+  if (lastTickReply_.has_control()) {
+    g_controlInputs.accel_cmd = lastTickReply_.control().accel_cmd();
+    g_controlInputs.curv_cmd = lastTickReply_.control().curv_cmd();
+  } else {
+    std::cerr << "Tick reply missing control command" << std::endl;
+  }
 }
 
-void SilCarMakerAdapter::writeOutputs(uint32_t /*cycleNo*/) {
-  if (!stub_) return;
+void SilCarMakerAdapter::writeOutputs([[maybe_unused]] uint32_t cycleNo) {
+  std::lock_guard l(mutex_);
+  if (!initialized_ || !stub_) return;
 
   grpc::ClientContext context;
-  sil::TickRequest request;
-  // TODO timestamp and cycleNo
-  auto now = std::chrono::system_clock::now();
-  auto now_us = std::chrono::duration_cast<std::chrono::microseconds>(
-                    now.time_since_epoch())
-                    .count();
-  request.set_timestamp_us(now_us);
-  sil::EgoState* egoState = request.mutable_ego_state();
-  egoState->set_pos_x(g_vehicleState.pos_x);
-  egoState->set_pos_y(g_vehicleState.pos_y);
-  egoState->set_velocity(g_vehicleState.velocity);
-  egoState->set_heading(g_vehicleState.heading);
-  egoState->set_yaw_rate(g_vehicleState.yaw_rate);
-  sil::TickReply response;
+  // TODO Read from config
+  context.set_deadline(std::chrono::system_clock::now() +
+                       std::chrono::milliseconds(200));
 
-  auto status{stub_->tick(&context, request, &response)};
+  sil::TickRequest request;
+
+  auto now{std::chrono::system_clock::now()};
+  auto now_us{std::chrono::duration_cast<std::chrono::microseconds>(
+                  now.time_since_epoch())
+                  .count()};
+  request.set_timestamp_us(static_cast<std::uint64_t>(now_us));
+
+  auto* egoState = request.mutable_ego_state();
+  egoState->set_pos_x(static_cast<float>(g_vehicleState.pos_x));
+  egoState->set_pos_y(static_cast<float>(g_vehicleState.pos_y));
+  egoState->set_velocity(static_cast<float>(g_vehicleState.velocity));
+  egoState->set_heading(static_cast<float>(g_vehicleState.heading));
+  egoState->set_yaw_rate(static_cast<float>(g_vehicleState.yaw_rate));
+
+  sil::TickReply reply;
+  auto status{stub_->tick(&context, request, &reply)};
   handleStatus(status);
+  // Store the last reply and status for retrieval in readInputs
+  lastTickStatus_ = status;
+  lastTickReply_ = std::move(reply);
+  havePendingTickReply_ = true;
 }
 
 int SilCarMakerAdapter::testRunEnd() {
-  if (!stub_) return -1;
+  if (!initialized_ || !stub_) return -1;
+
   grpc::ClientContext context;
   sil::ShutdownRequest request;
   request.set_reason(sil::ShutdownRequest::FINISHED);
@@ -133,7 +150,9 @@ int SilCarMakerAdapter::testRunEnd() {
 }
 
 void SilCarMakerAdapter::cleanup() {
-  // TODO
+  g_controlInputs = MockControlInputs{};
+  g_vehicleState = MockVehicleState{};
+  initialized_ = false;
 }
 
 int SilCarMakerAdapter::handleStatus(const grpc::Status& status) {

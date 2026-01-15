@@ -35,4 +35,7 @@ class SilCarMakerAdapter : public MockCarMakerInterface {
   std::shared_ptr<grpc::Channel> channel_{nullptr};
   std::unique_ptr<sil::VirtualDriverService::Stub> stub_{nullptr};
   bool initialized_{false};
+  sil::TickReply lastTickReply_{};
+  grpc::Status lastTickStatus_{};
+  bool havePendingTickReply_{false};
 };
