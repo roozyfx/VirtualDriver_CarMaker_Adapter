@@ -1,0 +1,35 @@
+The project is a minimal adapter that connects VirtualDriver via gRPC. The adapter sends ego vehicle state and receives control commands.
+1) The adapter, implemented in SilCarMakerAdapter class, takes the address of the server and the id of the ego vehicle as input parameters, e.g. `SilCarMakerAdapter adapter("localhost:50051", 1);`
+2) The adapter must be initialized first, don't forget this step or it will not work:`adapter.init()`
+3) Next, set the ego vehicle at an initial location and reset its state via `adapter.testRunStart()`
+4) In Each simulation loop, do the following in this order:
+`adapter.writeOuputs();`
+`adapter.readInputs();`
+Updating the (mock) ego vehicle happens in 
+`updateMockVehicle;`
+in this simplistic, test case. 
+`adapter.calc()` Does not do anything in current design, but it is recommended to keep it in your simulation.
+5) Finally, when the simulation loop is finished, shutdown the connection to the server and perfom cleanup:
+`adapter.testRunEnd();`
+`adapter.cleanup();`
+
+
+## Key Design decisions:
+1) The SilCarMakerAdapter follows an Adapter design pattern, more specifically it is an object adapter.
+So it derives from `MockCarMakerInterface` and stores an instance of `VirtualDriverService::Stub` as a data member.
+
+The project is seen as a minimal, first step solution and for the future steps to extend and improve it. As a result:
+2) Current implementation is a synchronous gRPC approach. It is chosen for its simplicity and easy logic. 
+3) Current implemented Error handling approach is to write to std::cerr. There is clear room for improvement here and one of the obvious next steps. 
+4) Following the _minimal working solution_ approach, there are some major problems with current implementation. For example, there are many hard-coded values, which as another next step improvement, should move to a configuration file.
+
+## Assumptions made:
+1) Server address is at localhost:50051
+2) Initial state of the ego vehicle is set to:
+pos_x(0.0)
+pos_y(0.0)
+velocity(0.0)
+heading(0.0)
+yaw_rate(0.0)
+3) The simple, mock server used, only send fixed values for acceleration and steering.
+4) The adapter waits for 3s to establish a connection to the server.
