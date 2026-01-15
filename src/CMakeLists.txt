@@ -58,7 +58,7 @@ else()
 endif()
 
 # TODO Turn this off by default and make the fetch option work
-option(USE_SYSTEM_GRPC "Use system installed gRPC" ON)
+
 if(USE_SYSTEM_GRPC)
   # Find system-installed gRPC
   find_package(gRPC CONFIG REQUIRED)

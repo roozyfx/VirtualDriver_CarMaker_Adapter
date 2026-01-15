@@ -9,6 +9,7 @@ set(CMAKE_CXX_STANDARD_REQUIRED ON)
 
 # Options
 option(BUILD_TESTING "Build tests" ON)
+option(USE_SYSTEM_GRPC "Use system installed gRPC" ON)
 
 add_subdirectory(src)
 add_subdirectory(apps)
